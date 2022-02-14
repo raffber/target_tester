@@ -2,10 +2,12 @@ use std::io::Cursor;
 use std::process::exit;
 use clap::{app_from_crate, arg, App, ArgMatches};
 use object::{Object, ObjectSymbol, ObjectSymbolTable};
-use target_tester::TestBinary;
+use target_tester::{Runner, TestBinary};
 
 
 fn main() {
+    env_logger::init();
+
     let matches = app_from_crate!()
         .arg(arg!(-c --config <CONFIG> "Config file"))
         .arg(arg!(<BINARY> "Binary file used for testing"))
@@ -25,7 +27,9 @@ fn main() {
 
     let table = binary.file.symbol_table().unwrap();
     for symbol in table.symbols() {
-        println!("{}", symbol.name().unwrap());
+        // println!("{}", symbol.name().unwrap());
     }
+
+    let runner = Runner::initialize().unwrap();
 
 }
