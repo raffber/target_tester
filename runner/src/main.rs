@@ -30,6 +30,6 @@ fn main() {
         // println!("{}", symbol.name().unwrap());
     }
 
-    let runner = Runner::initialize().unwrap();
+    // let runner = Runner::initialize().unwrap();
 
 }

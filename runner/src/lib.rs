@@ -9,8 +9,8 @@ mod bindings;
 pub mod jlink_sys;
 
 use object::read::File;
-use crate::config::Interface;
-use crate::jlink::JLink;
+use crate::config::{Interface, Speed};
+use crate::jlink_sys::{JLINKARM_SPEED_ADAPTIVE, JLINKARM_SPEED_AUTO, JLINKARM_TIF_JTAG, JLINKARM_TIF_SWD};
 
 
 pub struct TestBinary<'data> {
@@ -26,22 +26,31 @@ impl<'data> TestBinary<'data> {
 }
 
 
-pub struct Runner {
-    jlink: JLink
-}
+pub struct Runner {}
 
 impl Runner {
-    pub fn initialize() -> Result<Self, String> {
-        Ok(Runner {
-            jlink: JLink::open(None)?
-        })
+    fn use_batch_mode() -> Result<(), String> {
+        jlink::exec_command("SilentUpdateFW")?;
+        jlink::exec_command("SuppressInfoUpdateFW")?;
+        jlink::exec_command("SetBatchMode = 1")?;
+        jlink::exec_command("HideDeviceSelection = 1")?;
+        jlink::exec_command("SuppressControlPanel")?;
+        jlink::exec_command("DisableInfoWinFlashDL")?;
+        jlink::exec_command("DisableInfoWinFlashBPs").map(|_| ())
     }
 
-    pub fn configure(&mut self, interface: Interface, speed_khz: u16) -> Result<(), String> {
-        // self.link.select_interface(interface.into()).map_err(|x| x.to_string())?;
-        // let speed_config = SpeedConfig::khz(speed_khz).ok_or(format!("Invalid speed"))?;
-        // self.link.set_speed(speed_config).map_err(|x| x.to_string())
-        return Err(format!("Invalid Config"));
+    pub fn connect(device: &str, speed: Speed, interface: Interface) -> Result<Self, String> {
+        jlink::open(None)?;
+        Self::use_batch_mode();
+        jlink::exec_command(&format!("device = {}", device)).map(|_| ())?;
+        jlink::set_tif(interface)?;
+        jlink::set_speed(speed)?;
+        jlink::connect()?;
+        Ok(Runner {})
+    }
+
+    pub fn reset(&mut self) {
+        jlink::reset_device();
     }
 }
 
