@@ -2,8 +2,15 @@ mod config;
 mod jlink;
 mod bindings;
 
+#[allow(non_upper_case_globals)]
+#[allow(non_camel_case_types)]
+#[allow(non_snake_case)]
+#[allow(dead_code)]
+pub mod jlink_sys;
+
 use object::read::File;
 use crate::config::Interface;
+use crate::jlink::JLink;
 
 
 pub struct TestBinary<'data> {
@@ -20,17 +27,14 @@ impl<'data> TestBinary<'data> {
 
 
 pub struct Runner {
+    jlink: JLink
 }
 
 impl Runner {
     pub fn initialize() -> Result<Self, String> {
-        // for device in jaylink::scan_usb().unwrap() {
-        //     let device = device.open().map_err(|x| format!("{}", x))?;
-        //     return Ok(Self {
-        //         link: device
-        //     });
-        // }
-        return Err(format!("No J-Link device found."));
+        Ok(Runner {
+            jlink: JLink::open(None)?
+        })
     }
 
     pub fn configure(&mut self, interface: Interface, speed_khz: u16) -> Result<(), String> {

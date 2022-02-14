@@ -1,16 +1,15 @@
-use std::env;
-use std::path::PathBuf;
+use std::env::current_dir;
 
 fn main() {
+    println!("cargo:rerun-if-changed=3rdparty/");
     let bindings = bindgen::Builder::default()
         .header("wrapper.h")
-        // Use dynamic loading
-        .dynamic_library_name("jlink")
-        // ...
+        .dynamic_library_name("JLink")
         .generate()
         .expect("Unable to generate bindings");
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let cwd = current_dir().unwrap();
+    let out_path = cwd.join("src").join("jlink_sys.rs");
     bindings
-        .write_to_file(out_path.join("bindings.rs"))
+        .write_to_file(out_path)
         .expect("Couldn't write bindings!");
 }
