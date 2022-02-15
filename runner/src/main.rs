@@ -2,7 +2,7 @@ use std::io::Cursor;
 use std::process::exit;
 use clap::{app_from_crate, arg, App, ArgMatches};
 use object::{Object, ObjectSymbol, ObjectSymbolTable};
-use target_tester::{Runner, TestBinary};
+use target_tester::{LoadSegment, Runner, TestBinary};
 
 
 fn main() {
@@ -22,7 +22,8 @@ fn main() {
             exit(1);
         }
     };
-    let file = object::read::File::parse(binary.as_slice()).expect("Could not read elf-file");
+    let file = target_tester::ElfFile::parse(binary.as_slice()).expect("Could not read elf-file");
+    // let file = object::read::File::parse(binary.as_slice())
     let binary = TestBinary::new(file);
 
     let table = binary.file.symbol_table().unwrap();
@@ -30,6 +31,10 @@ fn main() {
         // println!("{}", symbol.name().unwrap());
     }
 
+    let segments = LoadSegment::get_from_file(&binary);
+    LoadSegment::collapse_segments(segments);
+
     // let runner = Runner::initialize().unwrap();
+    // Runner::upload(&binary);
 
 }
