@@ -109,14 +109,11 @@ pub fn reset_device() -> Result<(), String> {
     Ok(())
 }
 
-pub fn download(data: &[(u64, &[u8])]) -> Result<(), String> {
+pub fn download(addr: u64, data: &[u8]) -> Result<(), String> {
     unsafe {
         JLINK_API.JLINK_BeginDownload(0);
-        for (addr, data) in data {
-            let data = *data;
-            let stuff = JLINK_API.JLINK_WriteMem(*addr as u32, data.len() as u32, data.as_ptr() as *const c_void);
-            println!("JLINK_WriteMem = {}", stuff);
-        }
+        let stuff = JLINK_API.JLINK_WriteMem(addr as u32, data.len() as u32, data.as_ptr() as *const c_void);
+        println!("JLINK_WriteMem = {}", stuff);
         let stuff = JLINK_API.JLINK_EndDownload();
         println!("JLINK_EndDownload = {}", stuff);
     }
@@ -156,4 +153,30 @@ pub fn read_addr(addr: u64, length: usize) -> Result<Vec<u8>, String> {
     println!("JLINK_ReadMem returned {}", stuff);
     Ok(data)
 }
+
+pub fn halt() -> Result<(), String> {
+    let res = unsafe { JLINK_API.JLINKARM_Halt() };
+    if res == 0 {
+        Ok(())
+    } else {
+        Err(format!("Could not halt target."))
+    }
+}
+
+pub fn register_list() -> Vec<u32> {
+    todo!()
+}
+
+pub fn get_register_index_from_name(idx: u32) -> Result<String, String> {
+    todo!()
+}
+
+pub fn write_register(idx: u32, value: u32) -> Result<(), String> {
+    todo!()
+}
+
+pub fn set_stack_pointer_and_program_counter(stack_pointer: u32, program_counter: u32) -> Result<(), String> {
+    todo!()
+}
+
 
