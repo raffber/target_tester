@@ -12,6 +12,8 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::iter::repeat;
+use std::thread::sleep;
+use std::time::{Duration, Instant};
 use object::{Object, ObjectSymbol};
 use object::elf::PT_LOAD;
 use object::elf::FileHeader32;
@@ -41,7 +43,7 @@ pub struct Connection {}
 impl Connection {
     pub fn connect(device: &str, speed: Speed, interface: Interface) -> Result<Self, String> {
         jlink::open(None)?;
-        Self::use_batch_mode();
+        Self::use_batch_mode()?;
         jlink::exec_command(&format!("device = {}", device)).map(|_| ())?;
         jlink::set_tif(interface)?;
         jlink::set_speed(speed)?;
@@ -126,11 +128,11 @@ impl LoadSegment {
         })
     }
 
-    fn start_addr(&self) -> u64 {
+    pub fn start_addr(&self) -> u64 {
         self.addr
     }
 
-    fn end_addr(&self) -> u64 {
+    pub fn end_addr(&self) -> u64 {
         self.addr + (self.data.len() as u64)
     }
 }
@@ -147,10 +149,24 @@ impl TestCase {
     }
 }
 
+pub struct FailedAssert {
+    lhs: u32,
+    rhs: u32,
+    line: u32,
+    file_name: String,
+}
+
+pub struct TestResult {
+    case: TestCase,
+    error: FailedAssert,
+}
+
 pub struct Runner {
     data: LoadSegment,
     stack_pointer: u32,
     entry_point: u32,
+    run_test_addr: u64,
+    test_done_addr: u64,
     symbols: HashMap<String, u64>,
     tests: Vec<TestCase>,
 }
@@ -172,12 +188,24 @@ impl Runner {
             symbols.insert(symbol.name().unwrap().to_string(), symbol.address());
         }
 
+        let run_test_addr = match symbols.get("__target_test_run_test") {
+            None => return Err(format!("Did not find test runner in binary. Did you link it?")),
+            Some(run_test_addr) => *run_test_addr,
+        };
+
+        let test_done_addr = match symbols.get("__target_test_test_done") {
+            None => return Err(format!("Did not find test runner in binary. Did you link it?")),
+            Some(run_test_addr) => *run_test_addr,
+        };
+
         Ok(Self {
             data: segment,
             stack_pointer,
             entry_point,
             symbols,
+            run_test_addr,
             tests: Self::enumerate_tests(binary),
+            test_done_addr
         })
     }
 
@@ -202,8 +230,7 @@ impl Runner {
     pub fn reset(&mut self) -> Result<(), String> {
         jlink::halt()?;
         jlink::reset_device()?;
-        jlink::set_stack_pointer_and_program_counter(self.stack_pointer, self.entry_point)?;
-        Ok(())
+        jlink::set_stack_pointer_and_program_counter(self.stack_pointer, self.entry_point)
     }
 
     pub fn run(&mut self) -> Result<(), String> {
@@ -218,7 +245,27 @@ impl Runner {
     pub fn download(&mut self) -> Result<(), String> {
         jlink::download(self.data.addr, &self.data.data)
     }
-}
 
+    pub fn run_test(&mut self, test_case: &TestCase) -> Result<TestResult, String> {
+        jlink::clear_all_breakpoints()?;
+        jlink::set_breakpoint(0, self.run_test_addr)?;
+        jlink::set_breakpoint(1, self.test_done_addr)?;
+        self.reset_run()?;
+
+
+        todo!()
+    }
+
+    pub fn wait_for_target_halted(&mut self, timeout: Duration) -> Result<(), String> {
+        let now = Instant::now();
+        while now.elapsed().as_millis() < timeout.as_millis() {
+            sleep(Duration::from_millis(10));
+            if jlink::is_target_halted()? {
+                return Ok(())
+            }
+        }
+        Err(format!("Timeout while waiting for target to halt"))
+    }
+}
 
 

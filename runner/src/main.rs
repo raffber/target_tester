@@ -1,6 +1,5 @@
-use std::io::Cursor;
 use std::process::exit;
-use clap::{app_from_crate, arg, App, ArgMatches};
+use clap::{app_from_crate, arg};
 use object::{Object, ObjectSymbol, ObjectSymbolTable};
 use target_tester::{LoadSegment, Runner, TestBinary};
 

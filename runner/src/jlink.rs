@@ -179,4 +179,11 @@ pub fn set_stack_pointer_and_program_counter(stack_pointer: u32, program_counter
     todo!()
 }
 
+pub fn clear_all_breakpoints() -> Result<(), String> {
+    todo!()
+}
+
+pub fn is_target_halted() -> Result<bool, String> {
+    todo!()
+}
 
