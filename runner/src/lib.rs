@@ -188,10 +188,7 @@ impl Runner {
             symbols.insert(symbol.name().unwrap().to_string(), symbol.address());
         }
 
-        let run_test_addr = match symbols.get("__target_test_run_test") {
-            None => return Err(format!("Did not find test runner in binary. Did you link it?")),
-            Some(run_test_addr) => *run_test_addr,
-        };
+        let run_test_addr = Self::retrieve_symbol(&symbols, "target_test_fun_to_run");
 
         let test_done_addr = match symbols.get("__target_test_test_done") {
             None => return Err(format!("Did not find test runner in binary. Did you link it?")),
@@ -209,8 +206,15 @@ impl Runner {
         })
     }
 
+    fn retrieve_symbol(symbols: &HashMap<String, u64>, name: &str) -> Result<u64, String> {
+        match symbols.get("__target_test_run_test") {
+            None => return Err(format!("Did not find test runner in binary (symbol `{}` missing). Did you link it?", name)),
+            Some(x) => Ok(*x),
+        }
+    }
+
     fn enumerate_tests(binary: &TestBinary) -> Vec<TestCase> {
-        let test_re = Regex::new(r"^__test_(?P<suite_name>.*?)__target_test__(?P<test_name>.*?)$").unwrap();
+        let test_re = Regex::new(r"^target_test_test_(?P<suite_name>.*?)__target_test__(?P<test_name>.*?)$").unwrap();
         let mut tests = Vec::new();
         for symbol in binary.file.symbols() {
             let name = symbol.name().unwrap();
@@ -249,8 +253,8 @@ impl Runner {
     pub fn run_test(&mut self, test_case: &TestCase) -> Result<TestResult, String> {
         jlink::clear_all_breakpoints()?;
         jlink::set_breakpoint(0, self.run_test_addr)?;
-        jlink::set_breakpoint(1, self.test_done_addr)?;
         self.reset_run()?;
+        self.wait_for_target_halted(Duration::from_millis(200))?;
 
 
         todo!()

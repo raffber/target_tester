@@ -163,27 +163,59 @@ pub fn halt() -> Result<(), String> {
     }
 }
 
-pub fn register_list() -> Vec<u32> {
-    todo!()
+pub fn register_list() -> Result<Vec<u32>, String> {
+    const MAX_NUM_REGS: usize = 256;
+    let mut regs = [0 as c_uint; MAX_NUM_REGS];
+    let num_regs = unsafe {
+        JLINK_API.JLINKARM_GetRegisterList(regs.as_mut_ptr(), MAX_NUM_REGS as c_int)
+    };
+    if num_regs < 0 || num_regs > MAX_NUM_REGS as c_int {
+        return Err(format!("Got invalid number of registers from JLink."));
+    }
+    let num_regs = num_regs as usize;
+    Ok(regs[0 .. num_regs].iter().map(|x| *x as u32).collect())
 }
 
-pub fn get_register_index_from_name(idx: u32) -> Result<String, String> {
-    todo!()
+pub fn get_register_name_from_index(idx: u32) -> Result<String, String> {
+    let cstr = unsafe {
+        let result = JLINK_API.JLINKARM_GetRegisterName(idx);
+        if result.is_null() {
+            return Err(format!("Invalid register name for register with index {}.", idx));
+        }
+        CStr::from_ptr(result).to_owned()
+    };
+    Ok(cstr.to_str().unwrap().to_string())
 }
 
 pub fn write_register(idx: u32, value: u32) -> Result<(), String> {
-    todo!()
-}
-
-pub fn set_stack_pointer_and_program_counter(stack_pointer: u32, program_counter: u32) -> Result<(), String> {
-    todo!()
+    unsafe {
+        let res = JLINK_API.JLINKARM_WriteReg(idx, value);
+        if res != 0 {
+            return Err(format!("Error writing to register {}", idx));
+        }
+    }
+    Ok(())
 }
 
 pub fn clear_all_breakpoints() -> Result<(), String> {
-    todo!()
+    unsafe {
+        let result= JLINK_API.JLINKARM_ClrBPEx(-1);
+        if result != 0 {
+            return Err(format!("Error clearing all breakpoints."));
+        }
+    }
+    Ok(())
 }
 
 pub fn is_target_halted() -> Result<bool, String> {
+    todo!()
+}
+
+pub fn write_to_ram(addr: u32, data: &[u8]) -> Result<(), String> {
+    todo!()
+}
+
+pub fn read_from_ram(addr: u32, len: usize) -> Result<Vec<u8>, String> {
     todo!()
 }
 
