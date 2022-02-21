@@ -31,7 +31,8 @@ void target_test_run_all();
 void target_test_register(target_test_registered_test_t *test, target_test_voidfun_t fun);
 
 __attribute__((noreturn)) void target_test_fail(const char *file_path, uint32_t lineno);
-__attribute__((noreturn)) void target_test_fail_with_reason(const char *file_path, uint32_t lineno, int32_t reason, const uint64_t reason_data[2]);
+__attribute__((noreturn)) void
+target_test_fail_with_reason(const char *file_path, uint32_t lineno, int32_t reason, const uint64_t reason_data[2]);
 
 
 #define TEST(suite_name, test_name) \
@@ -44,6 +45,29 @@ __attribute__((noreturn)) void target_test_fail_with_reason(const char *file_pat
     void TEST_FUN_NAME(suite_name, test_name)(void)
 
 
+#define ASSERT_EQ(lhs, rhs) \
+    do {                    \
+        if ((lhs) == (rhs)) { \
+            break;                     \
+        }                   \
+        target_test_fail_with_reason(__FILE__, __LINE__, 1, NULL);                    \
+    } while(0);
+
+#define ASSERT_TRUE(value) \
+    do {                    \
+        if ((value)) { \
+            break;                     \
+        }                   \
+        target_test_fail_with_reason(__FILE__, __LINE__, 2, NULL);                    \
+    } while(0);
+
+#define ASSERT_FALSE(value) \
+    do {                    \
+        if (!(value)) { \
+            break;                     \
+        }                   \
+        target_test_fail_with_reason(__FILE__, __LINE__, 3, NULL);                    \
+    } while(0);
 
 #ifdef __cplusplus
 } // extern "C"

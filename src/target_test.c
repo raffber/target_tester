@@ -3,6 +3,28 @@
 #include "stdbool.h"
 #include "stddef.h"
 
+// TODO: consider allowing to define a weak abort() symbol
+
+#ifdef _WIN32
+#include <windows.h>
+
+static void abort() {
+    DebugBreak();
+    exit(1);
+}
+#elif __unix__
+    // include abort()
+    #include "stdlib.h"
+#else
+
+// embedded targets
+static void abort() {
+    while (1) {}
+}
+
+#endif
+
+
 typedef enum {
     TARGET_TEST_ASSERT_NONE = 0,
     TARGET_TEST_ASSERT_EQ = 1,
@@ -73,7 +95,8 @@ void target_test_fail_with_reason(const char *file_path, uint32_t lineno, int32_
     }
 
     MEMORY_SYNC
-    while (1) {}
+
+    abort();
 }
 
 void target_test_fail(const char *file_path, uint32_t lineno) {
