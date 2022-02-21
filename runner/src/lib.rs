@@ -1,4 +1,4 @@
-mod config;
+pub mod config;
 mod jlink;
 mod bindings;
 
@@ -12,6 +12,8 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::iter::repeat;
+use std::net::SocketAddr;
+use std::str::FromStr;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use object::{Object, ObjectSymbol};
@@ -42,7 +44,7 @@ pub struct Connection {}
 
 impl Connection {
     pub fn connect(device: &str, speed: Speed, interface: Interface) -> Result<Self, String> {
-        jlink::open(None)?;
+        jlink::open(Some(SocketAddr::from_str("127.0.0.1:19020").unwrap()))?;
         Self::use_batch_mode()?;
         jlink::exec_command(&format!("device = {}", device)).map(|_| ())?;
         jlink::set_tif(interface)?;
@@ -58,7 +60,8 @@ impl Connection {
         jlink::exec_command("HideDeviceSelection = 1")?;
         jlink::exec_command("SuppressControlPanel")?;
         jlink::exec_command("DisableInfoWinFlashDL")?;
-        jlink::exec_command("DisableInfoWinFlashBPs").map(|_| ())
+        jlink::exec_command("DisableInfoWinFlashBPs")?;
+        Ok(())
     }
 }
 
@@ -169,10 +172,11 @@ pub struct Runner {
     test_done_addr: u64,
     symbols: HashMap<String, u64>,
     tests: Vec<TestCase>,
+    connection: Connection,
 }
 
 impl Runner {
-    pub fn new(binary: &TestBinary, vector_table_addr: u64) -> Result<Self, String> {
+    pub fn new(binary: &TestBinary, vector_table_addr: u64, connection: Connection) -> Result<Self, String> {
         let segments_to_load = LoadSegment::get_from_file(binary);
         let segment = LoadSegment::collapse_segments(segments_to_load);
         let segment = segment.ok_or(format!("Binary does not contain a loadable segment."))?;
@@ -188,12 +192,8 @@ impl Runner {
             symbols.insert(symbol.name().unwrap().to_string(), symbol.address());
         }
 
-        let run_test_addr = Self::retrieve_symbol(&symbols, "target_test_fun_to_run");
-
-        let test_done_addr = match symbols.get("__target_test_test_done") {
-            None => return Err(format!("Did not find test runner in binary. Did you link it?")),
-            Some(run_test_addr) => *run_test_addr,
-        };
+        let run_test_addr = Self::retrieve_symbol(&symbols, "target_test_fun_to_run")?;
+        let test_done_addr = Self::retrieve_symbol(&symbols, "target_test_done")?;
 
         Ok(Self {
             data: segment,
@@ -202,12 +202,13 @@ impl Runner {
             symbols,
             run_test_addr,
             tests: Self::enumerate_tests(binary),
-            test_done_addr
+            test_done_addr,
+            connection
         })
     }
 
     fn retrieve_symbol(symbols: &HashMap<String, u64>, name: &str) -> Result<u64, String> {
-        match symbols.get("__target_test_run_test") {
+        match symbols.get(name) {
             None => return Err(format!("Did not find test runner in binary (symbol `{}` missing). Did you link it?", name)),
             Some(x) => Ok(*x),
         }
@@ -234,7 +235,9 @@ impl Runner {
     pub fn reset(&mut self) -> Result<(), String> {
         jlink::halt()?;
         jlink::reset_device()?;
-        jlink::set_stack_pointer_and_program_counter(self.stack_pointer, self.entry_point)
+        sleep(Duration::from_millis(50));
+        jlink::set_stack_pointer_and_program_counter(self.stack_pointer, self.entry_point)?;
+        Ok(())
     }
 
     pub fn run(&mut self) -> Result<(), String> {

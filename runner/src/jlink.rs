@@ -103,6 +103,7 @@ pub fn reset_device() -> Result<(), String> {
     let status = unsafe {
         JLINK_API.JLINKARM_Reset()
     };
+    println!("Reset Device status: {}", status);
     if status < 0 {
         return Err(format!("Cannot reset target."));
     }
@@ -143,7 +144,7 @@ pub fn run() -> Result<(), String> {
     Ok(())
 }
 
-pub fn read_addr(addr: u64, length: usize) -> Result<Vec<u8>, String> {
+pub fn read_ram(addr: u64, length: usize) -> Result<Vec<u8>, String> {
     let mut data = vec![0_u8; length];
     let slice = data.as_mut_slice();
     let ptr = slice.as_mut_ptr() as *mut c_void;
@@ -197,6 +198,13 @@ pub fn write_register(idx: u32, value: u32) -> Result<(), String> {
     Ok(())
 }
 
+pub fn read_register(idx: u32) -> Result<u32, String> {
+    let reg = unsafe {
+        JLINK_API.JLINKARM_ReadReg(idx)
+    };
+    Ok(reg as u32)
+}
+
 pub fn clear_all_breakpoints() -> Result<(), String> {
     unsafe {
         let result= JLINK_API.JLINKARM_ClrBPEx(-1);
@@ -211,11 +219,17 @@ pub fn is_target_halted() -> Result<bool, String> {
     todo!()
 }
 
-pub fn write_to_ram(addr: u32, data: &[u8]) -> Result<(), String> {
-    todo!()
+pub fn write_ram(addr: u32, data: &[u8]) -> Result<(), String> {
+    let ptr = data.as_ptr() as *const c_void;
+    let stuff = unsafe {
+        JLINK_API.JLINK_WriteMem(addr as c_uint, data.len() as u32, ptr) as i32
+    };
+    println!("JLINK_WriteMem returned {}", stuff);
+    Ok(())
 }
 
-pub fn read_from_ram(addr: u32, len: usize) -> Result<Vec<u8>, String> {
-    todo!()
+pub fn set_stack_pointer_and_program_counter(sp: u32, pc: u32) -> Result<(), String> {
+    write_register(13, sp)?;
+    write_register(15, pc)?;
+    Ok(())
 }
-

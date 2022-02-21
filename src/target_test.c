@@ -8,7 +8,7 @@
 #ifdef _WIN32
 #include <windows.h>
 
-static void abort() {
+static __attribute__((noreturn)) void abort() {
     DebugBreak();
     exit(1);
 }
@@ -18,7 +18,7 @@ static void abort() {
 #else
 
 // embedded targets
-static void abort() {
+static __attribute__((noreturn)) void abort() {
     while (1) {}
 }
 
@@ -51,6 +51,7 @@ target_test_registered_test_t *target_test_registry;
 
 void target_test_run_with_debugger() {
     while (target_test_fun_to_run == NULL) {}
+    (void)target_test_fun_to_run;
     MEMORY_SYNC
 
     target_test_started = true;

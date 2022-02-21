@@ -1,7 +1,8 @@
 use std::process::exit;
 use clap::{app_from_crate, arg};
 use object::{Object, ObjectSymbol, ObjectSymbolTable};
-use target_tester::{LoadSegment, Runner, TestBinary};
+use target_tester::{Connection, LoadSegment, Runner, TestBinary};
+use target_tester::config::{Interface, Speed};
 
 
 fn main() {
@@ -30,10 +31,11 @@ fn main() {
         // println!("{}", symbol.name().unwrap());
     }
 
-    let segments = LoadSegment::get_from_file(&binary);
-    LoadSegment::collapse_segments(segments);
+    let connection = Connection::connect("S32K148", Speed::KHz(4000), Interface::SWD).unwrap();
 
-    // let runner = Runner::initialize().unwrap();
-    // Runner::upload(&binary);
-
+    let mut runner = Runner::new(&binary, 0x10028, connection).unwrap();
+    runner.download().unwrap();
+    println!("Download successful");
+    runner.reset_run().unwrap();
+    println!("Reset Run successful");
 }
