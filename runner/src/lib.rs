@@ -140,6 +140,7 @@ impl LoadSegment {
     }
 }
 
+#[derive(Clone)]
 pub struct TestCase {
     pub suite_name: String,
     pub test_name: String,
@@ -152,16 +153,16 @@ impl TestCase {
     }
 }
 
+#[derive(Clone)]
 pub struct FailedAssert {
-    lhs: u32,
-    rhs: u32,
-    line: u32,
-    file_name: String,
+    pub line: u32,
+    pub file_name: String,
 }
 
+#[derive(Clone)]
 pub struct TestResult {
-    case: TestCase,
-    error: FailedAssert,
+    pub case: TestCase,
+    pub error: Option<FailedAssert>,
 }
 
 pub struct Runner {
@@ -170,6 +171,8 @@ pub struct Runner {
     entry_point: u32,
     run_test_addr: u64,
     test_done_addr: u64,
+    ready_addr: u64,
+    passed_addr: u64,
     symbols: HashMap<String, u64>,
     tests: Vec<TestCase>,
     connection: Connection,
@@ -194,6 +197,8 @@ impl Runner {
 
         let run_test_addr = Self::retrieve_symbol(&symbols, "target_test_fun_to_run")?;
         let test_done_addr = Self::retrieve_symbol(&symbols, "target_test_done")?;
+        let ready_addr = Self::retrieve_symbol(&symbols, "target_test_ready")?;
+        let passed_addr = Self::retrieve_symbol(&symbols, "target_test_passed")?;
 
         Ok(Self {
             data: segment,
@@ -203,7 +208,9 @@ impl Runner {
             run_test_addr,
             tests: Self::enumerate_tests(binary),
             test_done_addr,
-            connection
+            connection,
+            ready_addr,
+            passed_addr
         })
     }
 
@@ -254,13 +261,67 @@ impl Runner {
     }
 
     pub fn run_test(&mut self, test_case: &TestCase) -> Result<TestResult, String> {
-        jlink::clear_all_breakpoints()?;
-        jlink::set_breakpoint(0, self.run_test_addr)?;
         self.reset_run()?;
-        self.wait_for_target_halted(Duration::from_millis(200))?;
+        // let boot
+        self.wait_for_ready(Duration::from_millis(500))?;
 
+        let x = jlink::read_ram(self.test_done_addr, 1)?;
+        if x[0] != 0 {
+            return Err(format!("Incorrect test runtime startup!"));
+        }
+        let x = jlink::read_ram(self.passed_addr, 1)?;
+        if x[0] != 0 {
+            return Err(format!("Incorrect test runtime startup!"));
+        }
 
-        todo!()
+        jlink::halt()?;
+        self.wait_for_target_halted(Duration::from_millis(100))?;
+        let mut fun_ptr = [0_u8; 4];
+        LittleEndian::write_u32(&mut fun_ptr, test_case.addr as u32);
+        jlink::write_ram(self.run_test_addr as u32, &fun_ptr)?;
+        jlink::run();
+        self.wait_for_done(Duration::from_millis(500))?;
+
+        let test_passed = jlink::read_ram(self.passed_addr, 1)?;
+        let test_passed = test_passed[0] == 1;
+
+        let error = if !test_passed {
+            Some(FailedAssert {
+                line: 0,
+                file_name: "".to_string()
+            })
+        } else {
+            None
+        };
+
+        Ok(TestResult {
+            case: test_case.clone(),
+            error
+        })
+    }
+
+    pub fn wait_for_done(&mut self, timeout: Duration) -> Result<(), String> {
+        let now = Instant::now();
+        while now.elapsed().as_millis() < timeout.as_millis() {
+            sleep(Duration::from_millis(10));
+            let x = jlink::read_ram(self.test_done_addr, 1)?;
+            if x[0] == 1 {
+                return Ok(())
+            }
+        }
+        Err(format!("Timeout while waiting for test to finish"))
+    }
+
+    pub fn wait_for_ready(&mut self, timeout: Duration) -> Result<(), String> {
+        let now = Instant::now();
+        while now.elapsed().as_millis() < timeout.as_millis() {
+            sleep(Duration::from_millis(10));
+            let x = jlink::read_ram(self.ready_addr, 1)?;
+            if x[0] == 1 {
+                return Ok(())
+            }
+        }
+        Err(format!("Timeout while waiting for test suite to start up"))
     }
 
     pub fn wait_for_target_halted(&mut self, timeout: Duration) -> Result<(), String> {

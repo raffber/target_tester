@@ -30,12 +30,17 @@ fn main() {
     let tests =  Runner::enumerate_tests(&binary);
     let mut runner = Runner::new(&binary, 0x10028, connection).unwrap();
 
-    for test in &tests {
-        println!("{} -- {}", test.test_name, test.suite_name)
-    }
 
+    println!("Downloading test binary....");
     runner.download().unwrap();
-    println!("Download successful");
-    runner.reset_run().unwrap();
-    println!("Reset Run successful");
+    println!("done\n");
+    for test in &tests {
+        println!("Running test: {} -- {}", test.suite_name, test.test_name);
+        let result = runner.run_test(&test).unwrap();
+        if let Some(error) = result.error {
+            println!("Test failed at: {}:{}", error.file_name, error.line);
+        } else {
+            println!("Ok\n");
+        }
+    }
 }

@@ -112,8 +112,8 @@ pub fn reset_device() -> Result<(), String> {
 pub fn download(addr: u64, data: &[u8]) -> Result<(), String> {
     unsafe {
         JLINK_API.JLINK_BeginDownload(0);
-        let stuff = JLINK_API.JLINK_WriteMem(addr as u32, data.len() as u32, data.as_ptr() as *const c_void);
-        let stuff = JLINK_API.JLINK_EndDownload();
+        JLINK_API.JLINK_WriteMem(addr as u32, data.len() as u32, data.as_ptr() as *const c_void);
+        JLINK_API.JLINK_EndDownload();
     }
     Ok(())
 }
@@ -145,10 +145,9 @@ pub fn read_ram(addr: u64, length: usize) -> Result<Vec<u8>, String> {
     let mut data = vec![0_u8; length];
     let slice = data.as_mut_slice();
     let ptr = slice.as_mut_ptr() as *mut c_void;
-    let stuff = unsafe {
+    unsafe {
         JLINK_API.JLINK_ReadMem(addr as c_uint, length as u32, ptr) as i32
     };
-    println!("JLINK_ReadMem returned {}", stuff);
     Ok(data)
 }
 
@@ -213,12 +212,18 @@ pub fn clear_all_breakpoints() -> Result<(), String> {
 }
 
 pub fn is_target_halted() -> Result<bool, String> {
-    todo!()
+    let halted = unsafe  {
+        JLINK_API.JLINKARM_IsHalted()
+    };
+    if halted < 0 {
+        return Err(format!("Could not get whether halted, failed with code `{}`", halted));
+    }
+    Ok(halted > 0)
 }
 
 pub fn write_ram(addr: u32, data: &[u8]) -> Result<(), String> {
     let ptr = data.as_ptr() as *const c_void;
-    let stuff = unsafe {
+    unsafe {
         JLINK_API.JLINK_WriteMem(addr as c_uint, data.len() as u32, ptr) as i32
     };
     Ok(())

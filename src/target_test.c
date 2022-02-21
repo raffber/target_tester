@@ -35,6 +35,7 @@ typedef enum {
 
 volatile target_test_voidfun_t target_test_fun_to_run;
 volatile bool target_test_started;
+volatile bool target_test_ready;
 volatile bool target_test_done;
 volatile bool target_test_passed;
 volatile const char *target_test_file_path;
@@ -49,9 +50,21 @@ target_test_registered_test_t *target_test_registry;
     for (volatile int k = 0; k < 10; ++k) {}  \
 } while(0);
 
+
+static void reference_all() {
+    (void)target_test_ready;
+    (void)target_test_passed;
+    (void)target_test_done;
+    (void)target_test_started;
+    (void)target_test_file_path;
+    (void)target_test_lineno;
+}
+
 void target_test_run_with_debugger() {
+    reference_all();
+
+    target_test_ready = true;
     while (target_test_fun_to_run == NULL) {}
-    (void)target_test_fun_to_run;
     MEMORY_SYNC
 
     target_test_started = true;
