@@ -42,7 +42,7 @@ target_test_fail_with_reason(const char *file_path, uint32_t lineno, int32_t rea
         target_test_voidfun_t fun = & TEST_FUN_NAME(suite_name, test_name); \
         target_test_register(&reg, fun); \
     }\
-    void TEST_FUN_NAME(suite_name, test_name)(void)
+    __attribute__((section(".target_test"))) void TEST_FUN_NAME(suite_name, test_name)(void)
 
 
 #define ASSERT_EQ(lhs, rhs) \

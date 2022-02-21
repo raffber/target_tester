@@ -103,7 +103,6 @@ pub fn reset_device() -> Result<(), String> {
     let status = unsafe {
         JLINK_API.JLINKARM_Reset()
     };
-    println!("Reset Device status: {}", status);
     if status < 0 {
         return Err(format!("Cannot reset target."));
     }
@@ -114,9 +113,7 @@ pub fn download(addr: u64, data: &[u8]) -> Result<(), String> {
     unsafe {
         JLINK_API.JLINK_BeginDownload(0);
         let stuff = JLINK_API.JLINK_WriteMem(addr as u32, data.len() as u32, data.as_ptr() as *const c_void);
-        println!("JLINK_WriteMem = {}", stuff);
         let stuff = JLINK_API.JLINK_EndDownload();
-        println!("JLINK_EndDownload = {}", stuff);
     }
     Ok(())
 }
@@ -224,7 +221,6 @@ pub fn write_ram(addr: u32, data: &[u8]) -> Result<(), String> {
     let stuff = unsafe {
         JLINK_API.JLINK_WriteMem(addr as c_uint, data.len() as u32, ptr) as i32
     };
-    println!("JLINK_WriteMem returned {}", stuff);
     Ok(())
 }
 

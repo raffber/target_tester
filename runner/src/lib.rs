@@ -141,9 +141,9 @@ impl LoadSegment {
 }
 
 pub struct TestCase {
-    suite_name: String,
-    test_name: String,
-    addr: u64,
+    pub suite_name: String,
+    pub test_name: String,
+    pub addr: u64,
 }
 
 impl TestCase {
@@ -214,7 +214,7 @@ impl Runner {
         }
     }
 
-    fn enumerate_tests(binary: &TestBinary) -> Vec<TestCase> {
+    pub fn enumerate_tests(binary: &TestBinary) -> Vec<TestCase> {
         let test_re = Regex::new(r"^target_test_test_(?P<suite_name>.*?)__target_test__(?P<test_name>.*?)$").unwrap();
         let mut tests = Vec::new();
         for symbol in binary.file.symbols() {
