@@ -1,8 +1,10 @@
+use std::fs::File;
 use clap::{app_from_crate, arg};
 use object::{Object, ObjectSymbol, ObjectSymbolTable};
 use std::process::exit;
 use target_tester::config::{Interface, Speed};
 use target_tester::{Connection, LoadSegment, Runner, TestBinary, TestCase};
+use target_tester::report::xml_dump_result;
 
 fn main() {
     env_logger::init();
@@ -29,16 +31,13 @@ fn main() {
     let tests = Runner::enumerate_tests(&binary);
     let mut runner = Runner::new(&binary, 0x10028, connection).unwrap();
 
+
     println!("Downloading test binary....");
     runner.download().unwrap();
     println!("done\n");
-    for test in &tests {
-        println!("Running test: {} -- {}", test.suite_name, test.test_name);
-        let result = runner.run_test(&test).unwrap();
-        if let Some(error) = result.error {
-            println!("Test failed at: {}:{}", error.file_name, error.lineno);
-        } else {
-            println!("Ok\n");
-        }
-    }
+
+    let results= runner.run_all_tests().unwrap();
+
+    let mut file = File::create("my-junit.xml").unwrap();
+    xml_dump_result(results, file).unwrap();
 }

@@ -7,6 +7,7 @@ mod jlink;
 #[allow(non_snake_case)]
 #[allow(dead_code)]
 pub mod jlink_sys;
+pub mod report;
 
 use byteorder::{ByteOrder, LittleEndian};
 use object::elf::FileHeader32;
@@ -21,7 +22,7 @@ use std::iter::repeat;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use crate::config::{Interface, Speed};
 use crate::jlink_sys::{
@@ -169,6 +170,7 @@ pub struct FailedAssert {
 #[derive(Clone)]
 pub struct TestResult {
     pub case: TestCase,
+    pub timestamp: SystemTime,
     pub error: Option<FailedAssert>,
 }
 
@@ -303,7 +305,7 @@ impl Runner {
         let mut fun_ptr = [0_u8; 4];
         LittleEndian::write_u32(&mut fun_ptr, test_case.addr as u32);
         jlink::write_ram(self.run_test_addr as u32, &fun_ptr)?;
-        jlink::run();
+        jlink::run()?;
         self.wait_for_done(Duration::from_millis(500))?;
 
         let test_passed = jlink::read_ram(self.passed_addr, 1)?;
@@ -311,7 +313,9 @@ impl Runner {
 
         let lineno = jlink::read_ram(self.lineno_addr, 4)?;
         let lineno = LittleEndian::read_u32(&lineno);
-        let file_name = jlink::read_string(self.filestr_addr)?;
+        let file_name_ptr = jlink::read_ram(self.filestr_addr, 4)?;
+        let file_name_ptr = LittleEndian::read_u32(&file_name_ptr);
+        let file_name = jlink::read_string(file_name_ptr as u64)?;
 
         let error = if !test_passed {
             Some(FailedAssert {
@@ -324,8 +328,25 @@ impl Runner {
 
         Ok(TestResult {
             case: test_case.clone(),
+            timestamp: SystemTime::now(),
             error,
         })
+    }
+
+    pub fn run_all_tests(&mut self) -> Result<Vec<TestResult>, String> {
+        let mut ret = Vec::new();
+        let tests = self.tests.clone();
+        for test in tests {
+            println!("Running test: {} -- {}", test.suite_name, test.test_name);
+            let result = self.run_test(&test)?;
+            if let Some(error) = &result.error {
+                println!("Test failed at: {}:{}", error.file_name, error.lineno);
+            } else {
+                println!("Test Passed\n");
+            }
+            ret.push(result);
+        }
+        Ok(ret)
     }
 
     pub fn wait_for_done(&mut self, timeout: Duration) -> Result<(), String> {
@@ -363,3 +384,4 @@ impl Runner {
         Err(format!("Timeout while waiting for target to halt"))
     }
 }
+
