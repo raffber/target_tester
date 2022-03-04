@@ -1,8 +1,7 @@
-
-use std::io::Write;
-use once_cell::sync::Lazy;
-use tempfile::NamedTempFile;
 use crate::jlink_sys;
+use once_cell::sync::Lazy;
+use std::io::Write;
+use tempfile::NamedTempFile;
 
 cfg_if::cfg_if! {
     if #[cfg(unix)] {
@@ -12,11 +11,8 @@ cfg_if::cfg_if! {
     }
 }
 
-
 pub static JLINK_API: Lazy<jlink_sys::JLink> = Lazy::new(|| {
     let mut tmpfile = NamedTempFile::new().unwrap();
     tmpfile.write_all(JLINK_LIB).unwrap();
-    unsafe {
-        jlink_sys::JLink::new(tmpfile.path()).unwrap()
-    }
+    unsafe { jlink_sys::JLink::new(tmpfile.path()).unwrap() }
 });

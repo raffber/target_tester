@@ -1,9 +1,12 @@
+use crate::bindings::JLINK_API;
+use crate::jlink_sys::JLINKARM_SPEED_INVALID;
+use crate::{
+    Interface, Speed, JLINKARM_SPEED_ADAPTIVE, JLINKARM_SPEED_AUTO, JLINKARM_TIF_JTAG,
+    JLINKARM_TIF_SWD,
+};
 use std::ffi::{c_void, CStr, CString};
 use std::net::SocketAddr;
 use std::os::raw::{c_char, c_int, c_uint};
-use crate::bindings::JLINK_API;
-use crate::jlink_sys::JLINKARM_SPEED_INVALID;
-use crate::{Interface, JLINKARM_SPEED_ADAPTIVE, JLINKARM_SPEED_AUTO, JLINKARM_TIF_JTAG, JLINKARM_TIF_SWD, Speed};
 
 pub fn open(addr: Option<SocketAddr>) -> Result<(), String> {
     if let Some(addr) = addr {
@@ -42,7 +45,11 @@ pub fn exec_command(cmd: &str) -> Result<i32, String> {
     const OUT_BUF_SIZE: usize = 256;
     let mut out_buf = [0 as c_char; OUT_BUF_SIZE];
     let ret = unsafe {
-        let ret = JLINK_API.JLINKARM_ExecCommand(cmd.as_ptr(), &mut out_buf as *mut c_char, OUT_BUF_SIZE as c_int);
+        let ret = JLINK_API.JLINKARM_ExecCommand(
+            cmd.as_ptr(),
+            &mut out_buf as *mut c_char,
+            OUT_BUF_SIZE as c_int,
+        );
         if out_buf[0] != 0 {
             let str = CString::from_raw(&mut out_buf as *mut c_char);
             return Err(str.to_str().unwrap().to_string());
@@ -54,9 +61,7 @@ pub fn exec_command(cmd: &str) -> Result<i32, String> {
 }
 
 pub fn connect() -> Result<(), String> {
-    let result = unsafe {
-        JLINK_API.JLINKARM_Connect()
-    };
+    let result = unsafe { JLINK_API.JLINKARM_Connect() };
     if result < 0 {
         return Err(format!("Connection failed with error code `{}`", result));
     }
@@ -79,12 +84,8 @@ pub fn set_tif(tif: Interface) -> Result<(), String> {
 
 pub fn set_speed(speed: Speed) -> Result<(), String> {
     let speed = match speed {
-        Speed::Auto => {
-            JLINKARM_SPEED_AUTO
-        }
-        Speed::Adaptive => {
-            JLINKARM_SPEED_ADAPTIVE
-        }
+        Speed::Auto => JLINKARM_SPEED_AUTO,
+        Speed::Adaptive => JLINKARM_SPEED_ADAPTIVE,
         Speed::KHz(x) => {
             let x = x as u32;
             if x > JLINKARM_SPEED_INVALID || x == 0 {
@@ -100,9 +101,7 @@ pub fn set_speed(speed: Speed) -> Result<(), String> {
 }
 
 pub fn reset_device() -> Result<(), String> {
-    let status = unsafe {
-        JLINK_API.JLINKARM_Reset()
-    };
+    let status = unsafe { JLINK_API.JLINKARM_Reset() };
     if status < 0 {
         return Err(format!("Cannot reset target."));
     }
@@ -112,24 +111,24 @@ pub fn reset_device() -> Result<(), String> {
 pub fn download(addr: u64, data: &[u8]) -> Result<(), String> {
     unsafe {
         JLINK_API.JLINK_BeginDownload(0);
-        JLINK_API.JLINK_WriteMem(addr as u32, data.len() as u32, data.as_ptr() as *const c_void);
+        JLINK_API.JLINK_WriteMem(
+            addr as u32,
+            data.len() as u32,
+            data.as_ptr() as *const c_void,
+        );
         JLINK_API.JLINK_EndDownload();
     }
     Ok(())
 }
 
 pub fn set_breakpoint(idx: u32, addr: u64) -> Result<(), String> {
-    let stuff = unsafe {
-        JLINK_API.JLINKARM_SetBP(idx, addr as u32)
-    };
+    let stuff = unsafe { JLINK_API.JLINKARM_SetBP(idx, addr as u32) };
     println!("JLINKARM_SetBP returned {}", stuff);
     Ok(())
 }
 
 pub fn clear_breakpoint(idx: u32) -> Result<(), String> {
-    let stuff = unsafe {
-        JLINK_API.JLINKARM_ClrBP(idx)
-    };
+    let stuff = unsafe { JLINK_API.JLINKARM_ClrBP(idx) };
     println!("JLINKARM_ClrBP returned {}", stuff);
     Ok(())
 }
@@ -145,9 +144,7 @@ pub fn read_ram(addr: u64, length: usize) -> Result<Vec<u8>, String> {
     let mut data = vec![0_u8; length];
     let slice = data.as_mut_slice();
     let ptr = slice.as_mut_ptr() as *mut c_void;
-    unsafe {
-        JLINK_API.JLINK_ReadMem(addr as c_uint, length as u32, ptr) as i32
-    };
+    unsafe { JLINK_API.JLINK_ReadMem(addr as c_uint, length as u32, ptr) as i32 };
     Ok(data)
 }
 
@@ -163,21 +160,23 @@ pub fn halt() -> Result<(), String> {
 pub fn register_list() -> Result<Vec<u32>, String> {
     const MAX_NUM_REGS: usize = 256;
     let mut regs = [0 as c_uint; MAX_NUM_REGS];
-    let num_regs = unsafe {
-        JLINK_API.JLINKARM_GetRegisterList(regs.as_mut_ptr(), MAX_NUM_REGS as c_int)
-    };
+    let num_regs =
+        unsafe { JLINK_API.JLINKARM_GetRegisterList(regs.as_mut_ptr(), MAX_NUM_REGS as c_int) };
     if num_regs < 0 || num_regs > MAX_NUM_REGS as c_int {
         return Err(format!("Got invalid number of registers from JLink."));
     }
     let num_regs = num_regs as usize;
-    Ok(regs[0 .. num_regs].iter().map(|x| *x as u32).collect())
+    Ok(regs[0..num_regs].iter().map(|x| *x as u32).collect())
 }
 
 pub fn get_register_name_from_index(idx: u32) -> Result<String, String> {
     let cstr = unsafe {
         let result = JLINK_API.JLINKARM_GetRegisterName(idx);
         if result.is_null() {
-            return Err(format!("Invalid register name for register with index {}.", idx));
+            return Err(format!(
+                "Invalid register name for register with index {}.",
+                idx
+            ));
         }
         CStr::from_ptr(result).to_owned()
     };
@@ -195,15 +194,13 @@ pub fn write_register(idx: u32, value: u32) -> Result<(), String> {
 }
 
 pub fn read_register(idx: u32) -> Result<u32, String> {
-    let reg = unsafe {
-        JLINK_API.JLINKARM_ReadReg(idx)
-    };
+    let reg = unsafe { JLINK_API.JLINKARM_ReadReg(idx) };
     Ok(reg as u32)
 }
 
 pub fn clear_all_breakpoints() -> Result<(), String> {
     unsafe {
-        let result= JLINK_API.JLINKARM_ClrBPEx(-1);
+        let result = JLINK_API.JLINKARM_ClrBPEx(-1);
         if result != 0 {
             return Err(format!("Error clearing all breakpoints."));
         }
@@ -212,20 +209,19 @@ pub fn clear_all_breakpoints() -> Result<(), String> {
 }
 
 pub fn is_target_halted() -> Result<bool, String> {
-    let halted = unsafe  {
-        JLINK_API.JLINKARM_IsHalted()
-    };
+    let halted = unsafe { JLINK_API.JLINKARM_IsHalted() };
     if halted < 0 {
-        return Err(format!("Could not get whether halted, failed with code `{}`", halted));
+        return Err(format!(
+            "Could not get whether halted, failed with code `{}`",
+            halted
+        ));
     }
     Ok(halted > 0)
 }
 
 pub fn write_ram(addr: u32, data: &[u8]) -> Result<(), String> {
     let ptr = data.as_ptr() as *const c_void;
-    unsafe {
-        JLINK_API.JLINK_WriteMem(addr as c_uint, data.len() as u32, ptr) as i32
-    };
+    unsafe { JLINK_API.JLINK_WriteMem(addr as c_uint, data.len() as u32, ptr) as i32 };
     Ok(())
 }
 
@@ -233,4 +229,18 @@ pub fn set_stack_pointer_and_program_counter(sp: u32, pc: u32) -> Result<(), Str
     write_register(13, sp)?;
     write_register(15, pc)?;
     Ok(())
+}
+
+pub fn read_string(addr: u64) -> Result<String, String> {
+    const MAX_STRLEN: usize = 256;
+    let data = read_ram(addr, MAX_STRLEN)?;
+    if let Some(pos) = data.iter().position(|&x| x == 0) {
+        Ok(CString::new(&data[0..pos])
+            .unwrap()
+            .to_str()
+            .map_err(|_| format!("Could not decode C string."))?
+            .to_string())
+    } else {
+        Ok("".to_string())
+    }
 }

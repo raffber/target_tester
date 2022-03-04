@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub enum Interface {
@@ -17,5 +17,4 @@ pub enum Speed {
 pub struct Config {
     interface: Interface,
     speed_khz: u16,
-
 }

@@ -1,6 +1,6 @@
+mod bindings;
 pub mod config;
 mod jlink;
-mod bindings;
 
 #[allow(non_upper_case_globals)]
 #[allow(non_camel_case_types)]
@@ -8,6 +8,12 @@ mod bindings;
 #[allow(dead_code)]
 pub mod jlink_sys;
 
+use byteorder::{ByteOrder, LittleEndian};
+use object::elf::FileHeader32;
+use object::elf::PT_LOAD;
+use object::Endianness;
+use object::{Object, ObjectSymbol};
+use regex::Regex;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
@@ -16,15 +22,11 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use object::{Object, ObjectSymbol};
-use object::elf::PT_LOAD;
-use object::elf::FileHeader32;
-use object::Endianness;
-use byteorder::{ByteOrder, LittleEndian};
-use regex::Regex;
 
 use crate::config::{Interface, Speed};
-use crate::jlink_sys::{JLINKARM_SPEED_ADAPTIVE, JLINKARM_SPEED_AUTO, JLINKARM_TIF_JTAG, JLINKARM_TIF_SWD};
+use crate::jlink_sys::{
+    JLINKARM_SPEED_ADAPTIVE, JLINKARM_SPEED_AUTO, JLINKARM_TIF_JTAG, JLINKARM_TIF_SWD,
+};
 
 pub type ElfFile<'data> = object::read::elf::ElfFile<'data, FileHeader32<Endianness>>;
 
@@ -34,9 +36,7 @@ pub struct TestBinary<'data> {
 
 impl<'data> TestBinary<'data> {
     pub fn new(file: ElfFile<'data>) -> Self {
-        Self {
-            file
-        }
+        Self { file }
     }
 }
 
@@ -72,7 +72,11 @@ pub struct LoadSegment {
 
 impl Debug for LoadSegment {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("LoadSegment(0x{:x}, 0x{:x})", self.addr, self.data.len()))
+        f.write_fmt(format_args!(
+            "LoadSegment(0x{:x}, 0x{:x})",
+            self.addr,
+            self.data.len()
+        ))
     }
 }
 
@@ -149,13 +153,16 @@ pub struct TestCase {
 
 impl TestCase {
     pub fn symbol_name(&self) -> String {
-        format!("__test_{}__target_test__{}", self.suite_name, self.test_name)
+        format!(
+            "__test_{}__target_test__{}",
+            self.suite_name, self.test_name
+        )
     }
 }
 
 #[derive(Clone)]
 pub struct FailedAssert {
-    pub line: u32,
+    pub lineno: u32,
     pub file_name: String,
 }
 
@@ -173,13 +180,19 @@ pub struct Runner {
     test_done_addr: u64,
     ready_addr: u64,
     passed_addr: u64,
+    lineno_addr: u64,
+    filestr_addr: u64,
     symbols: HashMap<String, u64>,
     tests: Vec<TestCase>,
     connection: Connection,
 }
 
 impl Runner {
-    pub fn new(binary: &TestBinary, vector_table_addr: u64, connection: Connection) -> Result<Self, String> {
+    pub fn new(
+        binary: &TestBinary,
+        vector_table_addr: u64,
+        connection: Connection,
+    ) -> Result<Self, String> {
         let segments_to_load = LoadSegment::get_from_file(binary);
         let segment = LoadSegment::collapse_segments(segments_to_load);
         let segment = segment.ok_or(format!("Binary does not contain a loadable segment."))?;
@@ -199,6 +212,8 @@ impl Runner {
         let test_done_addr = Self::retrieve_symbol(&symbols, "target_test_done")?;
         let ready_addr = Self::retrieve_symbol(&symbols, "target_test_ready")?;
         let passed_addr = Self::retrieve_symbol(&symbols, "target_test_passed")?;
+        let lineno_addr = Self::retrieve_symbol(&symbols, "target_test_lineno")?;
+        let filestr_addr = Self::retrieve_symbol(&symbols, "target_test_file_path")?;
 
         Ok(Self {
             data: segment,
@@ -210,19 +225,28 @@ impl Runner {
             test_done_addr,
             connection,
             ready_addr,
-            passed_addr
+            passed_addr,
+            lineno_addr,
+            filestr_addr
         })
     }
 
     fn retrieve_symbol(symbols: &HashMap<String, u64>, name: &str) -> Result<u64, String> {
         match symbols.get(name) {
-            None => return Err(format!("Did not find test runner in binary (symbol `{}` missing). Did you link it?", name)),
+            None => {
+                return Err(format!(
+                    "Did not find test runner in binary (symbol `{}` missing). Did you link it?",
+                    name
+                ))
+            }
             Some(x) => Ok(*x),
         }
     }
 
     pub fn enumerate_tests(binary: &TestBinary) -> Vec<TestCase> {
-        let test_re = Regex::new(r"^target_test_test_(?P<suite_name>.*?)__target_test__(?P<test_name>.*?)$").unwrap();
+        let test_re =
+            Regex::new(r"^target_test_test_(?P<suite_name>.*?)__target_test__(?P<test_name>.*?)$")
+                .unwrap();
         let mut tests = Vec::new();
         for symbol in binary.file.symbols() {
             let name = symbol.name().unwrap();
@@ -285,10 +309,14 @@ impl Runner {
         let test_passed = jlink::read_ram(self.passed_addr, 1)?;
         let test_passed = test_passed[0] == 1;
 
+        let lineno = jlink::read_ram(self.lineno_addr, 4)?;
+        let lineno = LittleEndian::read_u32(&lineno);
+        let file_name = jlink::read_string(self.filestr_addr)?;
+
         let error = if !test_passed {
             Some(FailedAssert {
-                line: 0,
-                file_name: "".to_string()
+                lineno,
+                file_name,
             })
         } else {
             None
@@ -296,7 +324,7 @@ impl Runner {
 
         Ok(TestResult {
             case: test_case.clone(),
-            error
+            error,
         })
     }
 
@@ -306,7 +334,7 @@ impl Runner {
             sleep(Duration::from_millis(10));
             let x = jlink::read_ram(self.test_done_addr, 1)?;
             if x[0] == 1 {
-                return Ok(())
+                return Ok(());
             }
         }
         Err(format!("Timeout while waiting for test to finish"))
@@ -318,7 +346,7 @@ impl Runner {
             sleep(Duration::from_millis(10));
             let x = jlink::read_ram(self.ready_addr, 1)?;
             if x[0] == 1 {
-                return Ok(())
+                return Ok(());
             }
         }
         Err(format!("Timeout while waiting for test suite to start up"))
@@ -329,11 +357,9 @@ impl Runner {
         while now.elapsed().as_millis() < timeout.as_millis() {
             sleep(Duration::from_millis(10));
             if jlink::is_target_halted()? {
-                return Ok(())
+                return Ok(());
             }
         }
         Err(format!("Timeout while waiting for target to halt"))
     }
 }
-
-
