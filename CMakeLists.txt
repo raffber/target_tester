@@ -12,3 +12,5 @@ add_executable(target_tester
         src/target_test.h
         src/target_test.c
         )
+
+target_compile_definitions(target_tester PRIVATE TARGET_TEST_RUNTIME=2)

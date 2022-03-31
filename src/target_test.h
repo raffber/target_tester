@@ -3,45 +3,27 @@
 
 #include "stdint.h"
 
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define TARGET_TEST_REASON_USER     0x1000
+#define TARGET_TEST_RUNTIME_GTEST 1
+#define TARGET_TEST_RUNTIME_NATIVE 2
 
-typedef void (*target_test_voidfun_t)(void);
-
-struct target_test_registered_test_s;
-typedef struct target_test_registered_test_s target_test_registered_test_t;
-
-struct target_test_registered_test_s {
-    target_test_voidfun_t fun;
-    target_test_registered_test_t *next;
-};
+#if TARGET_TEST_RUNTIME == TARGET_TEST_RUNTIME_GTEST
+#include "gtest/gtest.h"
+#elif TARGET_TEST_RUNTIME == TARGET_TEST_RUNTIME_NATIVE
 
 #define TEST_FUN_NAME(suite_name, test_name)        target_test_test_ ## suite_name ## __target_test__ ## test_name
-#define TEST_CONSTRUCTOR_NAME(suite_name, test_name)        target_test_constructor_ ## suite_name ## __target_test__ ## test_name
-
 
 void target_test_run_with_debugger();
 
-void target_test_run_all();
-
-void target_test_register(target_test_registered_test_t *test, target_test_voidfun_t fun);
-
 __attribute__((noreturn)) void target_test_fail(const char *file_path, uint32_t lineno);
-__attribute__((noreturn)) void
-target_test_fail_with_reason(const char *file_path, uint32_t lineno, int32_t reason, const uint64_t reason_data[2]);
+__attribute__((noreturn)) void target_test_fail_with_reason(const char *file_path, uint32_t lineno, int32_t reason);
 
 
 #define TEST(suite_name, test_name) \
     void TEST_FUN_NAME(suite_name, test_name)(); \
-    void __attribute__ ((constructor)) TEST_CONSTRUCTOR_NAME(suite_name, test_name)(void)  { \
-        static target_test_registered_test_t reg; \
-        target_test_voidfun_t fun = & TEST_FUN_NAME(suite_name, test_name); \
-        target_test_register(&reg, fun); \
-    }\
     __attribute__((section(".target_test"))) void TEST_FUN_NAME(suite_name, test_name)(void)
 
 
@@ -50,7 +32,7 @@ target_test_fail_with_reason(const char *file_path, uint32_t lineno, int32_t rea
         if ((lhs) == (rhs)) { \
             break;                     \
         }                   \
-        target_test_fail_with_reason(__FILE__, __LINE__, 1, NULL);                    \
+        target_test_fail_with_reason(__FILE__, __LINE__, 1);                    \
     } while(0);
 
 #define ASSERT_TRUE(value) \
@@ -58,7 +40,7 @@ target_test_fail_with_reason(const char *file_path, uint32_t lineno, int32_t rea
         if ((value)) { \
             break;                     \
         }                   \
-        target_test_fail_with_reason(__FILE__, __LINE__, 2, NULL);                    \
+        target_test_fail_with_reason(__FILE__, __LINE__, 2);                    \
     } while(0);
 
 #define ASSERT_FALSE(value) \
@@ -66,8 +48,12 @@ target_test_fail_with_reason(const char *file_path, uint32_t lineno, int32_t rea
         if (!(value)) { \
             break;                     \
         }                   \
-        target_test_fail_with_reason(__FILE__, __LINE__, 3, NULL);                    \
+        target_test_fail_with_reason(__FILE__, __LINE__, 3);                    \
     } while(0);
+
+#else
+#error("Invalid or no TARGET_TEST_RUNTIME selected.")
+#endif
 
 #ifdef __cplusplus
 } // extern "C"
