@@ -58,6 +58,7 @@ volatile target_test_voidfun_t target_test_fun_to_run;
     __sync_synchronize(); \
 } while(0);
 
+
 uint32_t target_test_crc32(const volatile void *data, uint32_t size) {
     uint32_t crc = ~0;
     volatile uint8_t * byte_data = (volatile uint8_t *)data;
@@ -77,6 +78,10 @@ static void target_test_state_data_update(target_test_state_t new_state) {
     target_test_data.state = new_state;
     target_test_data.crc = target_test_crc32(&target_test_data, sizeof(target_test_data) - sizeof(uint32_t));
     MEMORY_SYNC
+}
+
+__attribute__((constructor)) void target_test_startup() {
+    target_test_state_data_update(TARGET_TEST_IDLE);
 }
 
 void target_test_run_with_debugger() {
