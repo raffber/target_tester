@@ -32,17 +32,26 @@ typedef enum {
     TARGET_TEST_ASSERT_FALSE = 3,
 } target_test_assertion_type_t;
 
+typedef enum {
+    TARGET_TEST_IDLE = 0x8C3F82FA,
+    TARGET_TEST_READY = 0xD79A2E5F,
+    TARGET_TEST_STARTED = 0xCD833CB7,
+    TARGET_TEST_PASSED = 0xBAF2C481,
+    TARGET_TEST_FAILED = 0xCA83D14E,
+} target_test_state_t;
 
+
+typedef struct {
+    target_test_state_t state;
+    target_test_voidfun_t executed_function;
+    target_test_assertion_type_t fail_reason;
+    const char *test_file_path;
+    uint32_t lineno;
+    uint32_t crc;
+} target_test_data_t;
+
+volatile target_test_data_t target_test_data;
 volatile target_test_voidfun_t target_test_fun_to_run;
-volatile bool target_test_started;
-volatile bool target_test_ready;
-volatile bool target_test_done;
-volatile bool target_test_passed;
-volatile const char *target_test_file_path;
-volatile uint32_t target_test_lineno;
-
-volatile int32_t target_test_fail_reason;
-volatile uint64_t target_test_reason_data[2];
 
 target_test_registered_test_t *target_test_registry;
 
@@ -50,33 +59,36 @@ target_test_registered_test_t *target_test_registry;
     for (volatile int k = 0; k < 10; ++k) {}  \
 } while(0);
 
+uint32_t target_test_crc32(const volatile void *data, uint32_t size) {
+    uint32_t crc = ~0;
+    volatile uint8_t * byte_data = (volatile uint8_t *)data;
 
-static void reference_all() {
-    (void)target_test_ready;
-    (void)target_test_passed;
-    (void)target_test_done;
-    (void)target_test_started;
-    (void)target_test_file_path;
-    (void)target_test_lineno;
+    for (uint32_t k_byte = 0; k_byte < size; ++k_byte) {
+        crc ^= byte_data[k_byte];
+        for (uint32_t k_bit = 0; k_bit < 8; ++k_bit) {
+            uint32_t temp = ~((crc & 1) - 1);
+            crc = (crc >> 1) ^ (0x4C11DB7 & temp);
+        }
+    }
+
+    return ~crc;
+}
+
+static void target_test_state_data_update(target_test_state_t new_state) {
+    target_test_data.state = new_state;
+    target_test_data.crc = target_test_crc32(&target_test_data, sizeof(target_test_data) - sizeof(uint32_t));
+    MEMORY_SYNC
 }
 
 void target_test_run_with_debugger() {
-    reference_all();
+    target_test_state_data_update(TARGET_TEST_READY);
 
-    target_test_ready = true;
     while (target_test_fun_to_run == NULL) {}
     MEMORY_SYNC
 
-    target_test_started = true;
-
-    MEMORY_SYNC
+    target_test_state_data_update(TARGET_TEST_STARTED);
     target_test_fun_to_run();
-    MEMORY_SYNC
-
-    target_test_passed = true;
-    target_test_done = true;
-
-    MEMORY_SYNC
+    target_test_state_data_update(TARGET_TEST_PASSED);
 }
 
 void target_test_run_all() {
