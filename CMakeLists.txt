@@ -8,7 +8,7 @@ include_directories(src)
 
 add_executable(target_tester
         src/linux/main.cpp
-        src/linux/test.c
+        src/linux/test.cpp
         src/target_test.h
         src/target_test.c
         )
