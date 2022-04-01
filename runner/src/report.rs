@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io::Write;
 use junit_report::{Duration, Report, ReportError, TestCase, TestSuite};
-use crate::TestResult;
+use crate::runner::TestResult;
 
 pub fn xml_dump_result(results: Vec<TestResult>, mut write: impl Write) -> Result<(), ReportError> {
     let mut sorted = HashMap::new();
@@ -18,7 +18,7 @@ pub fn xml_dump_result(results: Vec<TestResult>, mut write: impl Write) -> Resul
                     TestCase::success(&test.case.test_name, Duration::microseconds(0))
                 }
                 Some(err) => {
-                    let msg = format!("Assert failed at {}:{}", err.file_name, err.lineno);
+                    let msg = format!("Assert failed at {}:{}", err.file_name.unwrap_or_default(), err.lineno.unwrap_or_default());
                     TestCase::error(&test.case.test_name, Duration::microseconds(0), "Assert Failed", &msg)
                 }
             };

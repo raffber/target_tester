@@ -1,12 +1,78 @@
-use crate::bindings::JLINK_API;
-use crate::jlink_sys::JLINKARM_SPEED_INVALID;
-use crate::{
-    Interface, Speed, JLINKARM_SPEED_ADAPTIVE, JLINKARM_SPEED_AUTO, JLINKARM_TIF_JTAG,
-    JLINKARM_TIF_SWD,
-};
 use std::ffi::{c_void, CStr, CString};
 use std::net::SocketAddr;
 use std::os::raw::{c_char, c_int, c_uint};
+use std::str::FromStr;
+use std::thread::sleep;
+use std::time::{Duration, Instant};
+
+use crate::bindings::JLINK_API;
+use crate::config::{Interface, Speed};
+use crate::connection::Connection;
+use crate::jlink_sys::{JLINKARM_SPEED_INVALID, JLINKARM_SPEED_ADAPTIVE, JLINKARM_SPEED_AUTO, JLINKARM_TIF_JTAG, JLINKARM_TIF_SWD};
+
+pub struct JlinkConnection {}
+
+impl JlinkConnection {
+    pub fn connect(device: &str, speed: Speed, interface: Interface) -> Result<Self, String> {
+        open(Some(SocketAddr::from_str("127.0.0.1:19020").unwrap()))?;
+        Self::use_batch_mode()?;
+        exec_command(&format!("device = {}", device)).map(|_| ())?;
+        set_tif(interface)?;
+        set_speed(speed)?;
+        connect()?;
+        Ok(Self {})
+    }
+
+    fn use_batch_mode() -> Result<(), String> {
+        exec_command("SilentUpdateFW")?;
+        exec_command("SuppressInfoUpdateFW")?;
+        exec_command("SetBatchMode = 1")?;
+        exec_command("HideDeviceSelection = 1")?;
+        exec_command("SuppressControlPanel")?;
+        exec_command("DisableInfoWinFlashDL")?;
+        exec_command("DisableInfoWinFlashBPs")?;
+        Ok(())
+    }
+}
+
+
+impl Connection for JlinkConnection {
+    fn read_ram(&mut self, addr: u32, length: usize) -> Result<Vec<u8>, String> {
+        read_ram(addr as u64, length)
+    }
+
+    fn write_ram(&mut self, addr: u32, data: &[u8]) -> Result<(), String> {
+        write_ram(addr, data)
+    }
+
+    fn halt(&mut self, timeout: Duration) -> Result<(), String> {
+        halt()?;
+        let now = Instant::now();
+        while now.elapsed().as_millis() < timeout.as_millis() {
+            sleep(Duration::from_millis(10));
+            if is_target_halted()? {
+                return Ok(());
+            }
+        }
+        Err(format!("Timeout while waiting for target to halt"))
+    }
+
+    fn run(&mut self) -> Result<(), String> {
+        run()
+    }
+
+    fn reset_run(&mut self, stack_ptr: u32, entry_point: u32) -> Result<(), String> {
+        halt()?;
+        reset_device()?;
+        sleep(Duration::from_millis(50));
+        set_stack_pointer_and_program_counter(stack_ptr, entry_point)
+    }
+
+    fn download(&mut self, addr: u32, data: &[u8]) -> Result<(), String> {
+        download(addr as u64, data)
+    }
+}
+
 
 pub fn open(addr: Option<SocketAddr>) -> Result<(), String> {
     if let Some(addr) = addr {
@@ -229,18 +295,4 @@ pub fn set_stack_pointer_and_program_counter(sp: u32, pc: u32) -> Result<(), Str
     write_register(13, sp)?;
     write_register(15, pc)?;
     Ok(())
-}
-
-pub fn read_string(addr: u64) -> Result<String, String> {
-    const MAX_STRLEN: usize = 256;
-    let data = read_ram(addr, MAX_STRLEN)?;
-    if let Some(pos) = data.iter().position(|&x| x == 0) {
-        Ok(CString::new(&data[0..pos])
-            .unwrap()
-            .to_str()
-            .map_err(|_| format!("Could not decode C string."))?
-            .to_string())
-    } else {
-        Ok("".to_string())
-    }
 }
