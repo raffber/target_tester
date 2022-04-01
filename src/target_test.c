@@ -3,7 +3,9 @@
 #include "stdbool.h"
 #include "stddef.h"
 
-// TODO: consider allowing to define a weak abort() symbol
+#ifndef TARGET_TEST_ABORT
+#define TARGET_TEST_ABORT abort();
+#endif
 
 #ifdef _WIN32
 #include <windows.h>
@@ -13,13 +15,14 @@ static __attribute__((noreturn)) void abort() {
     exit(1);
 }
 #elif __unix__
-    // include abort()
-    #include "stdlib.h"
+// include abort()
+#include "stdlib.h"
 #else
 
 // embedded targets
 static __attribute__((noreturn)) void abort() {
-    while (1) {}
+    while (1) {
+    }
 }
 
 #endif
@@ -41,7 +44,6 @@ typedef enum {
     TARGET_TEST_FAILED = 0xCA83D14E,
 } target_test_state_t;
 
-
 typedef struct {
     target_test_state_t state;
     target_test_voidfun_t executed_function;
@@ -54,20 +56,20 @@ typedef struct {
 volatile target_test_data_t target_test_data;
 volatile target_test_voidfun_t target_test_fun_to_run;
 
-#define MEMORY_SYNC         do { \
-    __sync_synchronize(); \
-} while(0);
+#define MEMORY_SYNC                                                                                                    \
+    do {                                                                                                               \
+        __sync_synchronize();                                                                                          \
+    } while (0);
 
-
-uint32_t target_test_crc32(const volatile void *data, uint32_t size) {
+static uint32_t target_test_crc32(const volatile void *data, uint32_t size) {
     uint32_t crc = ~0;
-    volatile uint8_t * byte_data = (volatile uint8_t *)data;
+    volatile uint8_t *byte_data = (volatile uint8_t *) data;
 
     for (uint32_t k_byte = 0; k_byte < size; ++k_byte) {
         crc ^= byte_data[k_byte];
         for (uint32_t k_bit = 0; k_bit < 8; ++k_bit) {
             uint32_t temp = ~((crc & 1) - 1);
-            crc = (crc >> 1) ^ (0x4C11DB7 & temp);
+            crc = (crc >> 1) ^ (0xEDB88320 & temp);// reflection of 0x4C11DB7
         }
     }
 
@@ -87,16 +89,16 @@ __attribute__((constructor)) void target_test_startup() {
 void target_test_run_with_debugger() {
     target_test_state_data_update(TARGET_TEST_READY);
 
-    while (target_test_fun_to_run == NULL) {}
+    while (target_test_fun_to_run == NULL) {
+    }
     MEMORY_SYNC
 
+    target_test_data.executed_function = target_test_fun_to_run;
     target_test_state_data_update(TARGET_TEST_STARTED);
     target_test_fun_to_run();
-    target_test_state_data_update(TARGET_TEST_PASSED);
-}
-
-void target_test_fail(const char *file_path, uint32_t lineno) {
-    target_test_fail_with_reason(file_path, lineno, TARGET_TEST_ASSERT_NONE);
+    if (target_test_data.state != TARGET_TEST_FAILED) {
+        target_test_state_data_update(TARGET_TEST_PASSED);
+    }
 }
 
 void target_test_fail_with_reason(const char *file_path, uint32_t lineno, int32_t reason) {
@@ -104,8 +106,12 @@ void target_test_fail_with_reason(const char *file_path, uint32_t lineno, int32_
 
     target_test_data.test_file_path = file_path;
     target_test_data.lineno = lineno;
-    target_test_data.fail_reason = reason;
+    target_test_data.fail_reason = (target_test_assertion_type_t) reason;
     target_test_state_data_update(TARGET_TEST_FAILED);
 
-    abort();
+    TARGET_TEST_ABORT
+}
+
+void target_test_fail(const char *file_path, uint32_t lineno) {
+    target_test_fail_with_reason(file_path, lineno, TARGET_TEST_ASSERT_NONE);
 }
