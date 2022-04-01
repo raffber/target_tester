@@ -12,6 +12,9 @@
 
 #ifdef __cplusplus
 extern "C" {
+#define TARGET_TEST_ABI extern "C"
+#else
+#define TARGET_TEST_ABI
 #endif
 
 #define TARGET_TEST_FUN_NAME(suite_name, test_name) target_test_test_##suite_name##__target_test__##test_name
@@ -27,8 +30,8 @@ void target_test_fail(const char *file_path, uint32_t lineno);
 void target_test_fail_with_reason(const char *file_path, uint32_t lineno, int32_t reason);
 
 #define TEST(suite_name, test_name)                                                                                    \
-    void TARGET_TEST_FUN_NAME(suite_name, test_name)();                                                                \
-    __attribute__((section(".target_test"))) void TARGET_TEST_FUN_NAME(suite_name, test_name)(void)
+    TARGET_TEST_ABI void TARGET_TEST_FUN_NAME(suite_name, test_name)();                                                \
+    TARGET_TEST_ABI __attribute__((section(".target_test"))) void TARGET_TEST_FUN_NAME(suite_name, test_name)(void)
 
 #define ASSERT_EQ(lhs, rhs)                                                                                            \
     do {                                                                                                               \
