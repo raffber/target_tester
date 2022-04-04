@@ -13,6 +13,7 @@ pub mod jlink_sys;
 pub mod report;
 pub mod connection;
 pub mod runner;
+mod crc;
 
 pub type ElfFile<'data> = object::read::elf::ElfFile<'data, FileHeader32<Endianness>>;
 

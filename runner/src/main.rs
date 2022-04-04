@@ -14,12 +14,11 @@ fn main() {
 
     let matches = app_from_crate!()
         .arg(arg!(-c --config <CONFIG> "Config file"))
-        .arg(arg!(-o --output <OUTPUT> "Output file"))
+        .arg(arg!(-o --output [OUTPUT] "Output file"))
         .arg(arg!(<BINARY> "Binary file used for testing"))
         .get_matches();
     let binary = matches.value_of("BINARY").unwrap();
     let config = matches.value_of("config").unwrap();
-    let output = matches.value_of("output").unwrap();
 
     let mut config_data = String::new();
     let mut config_file = File::open(config).expect(&format!("Could not open config file: {}", config));
@@ -39,9 +38,9 @@ fn main() {
     let file = target_tester::ElfFile::parse(binary.as_slice()).expect("Could not read elf-file");
     let binary = TestBinary::new(file);
 
-    let connection = JlinkConnection::connect(&config.target, config.speed_khz, config.interface).unwrap();
+    let connection = JlinkConnection::connect(&config.target, config.speed, config.interface).unwrap();
 
-    let mut runner = Runner::new(&binary, 0x10028, connection).unwrap();
+    let mut runner = Runner::new(&binary, 0x8028, connection).unwrap();
 
 
     println!("Downloading test binary....");
@@ -50,6 +49,8 @@ fn main() {
 
     let results = runner.run_all_tests().unwrap();
 
-    let file = File::create(output).expect(&format!("Could not write to output file: {}", output));
-    xml_dump_result(results, file).unwrap();
+    if let Some(output) = matches.value_of("output") {
+        let file = File::create(output).expect(&format!("Could not write to output file: {}", output));
+        xml_dump_result(results, file).unwrap();
+    }
 }

@@ -51,9 +51,11 @@ impl Connection for JlinkConnection {
         while now.elapsed().as_millis() < timeout.as_millis() {
             sleep(Duration::from_millis(10));
             if is_target_halted()? {
+                log::debug!("Halting target successful");
                 return Ok(());
             }
         }
+        log::debug!("Halting target failed");
         Err(format!("Timeout while waiting for target to halt"))
     }
 
@@ -62,13 +64,20 @@ impl Connection for JlinkConnection {
     }
 
     fn reset_run(&mut self, stack_ptr: u32, entry_point: u32) -> Result<(), String> {
-        halt()?;
+        self.halt(Duration::from_millis(500))?;
+        log::debug!("Resetting device");
+        sleep(Duration::from_millis(50));
         reset_device()?;
         sleep(Duration::from_millis(50));
-        set_stack_pointer_and_program_counter(stack_ptr, entry_point)
+        log::debug!("Setting stack pointer and entry point");
+        set_stack_pointer_and_program_counter(stack_ptr, entry_point)?;
+        log::debug!("Running target");
+        self.run()
     }
 
     fn download(&mut self, addr: u32, data: &[u8]) -> Result<(), String> {
+        self.halt(Duration::from_millis(500))?;
+        reset_device()?;
         download(addr as u64, data)
     }
 }

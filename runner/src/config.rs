@@ -16,6 +16,6 @@ pub enum Speed {
 #[derive(Serialize, Deserialize)]
 pub struct Config {
     pub interface: Interface,
-    pub speed_khz: Speed,
+    pub speed: Speed,
     pub target: String,
 }

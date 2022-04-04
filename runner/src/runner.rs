@@ -12,6 +12,7 @@ use object::Endianness;
 use regex::Regex;
 
 use crate::connection::Connection;
+use crate::crc::crc32;
 use crate::ElfFile;
 
 pub struct TestBinary<'data> {
@@ -159,16 +160,7 @@ struct TargetData {
 
 impl TargetData {
     fn crc32(data: &[u8]) -> u32 {
-        let mut crc: u32 = !0;
-
-        for x in data {
-            crc ^= *x as u32;
-            for _ in 0..8 {
-                let tmp = !((crc & 1) - 1);
-                crc = (crc >> 1) ^ (0xEDB88320 & tmp);// reflection of 0x4C11DB7
-            }
-        }
-        crc
+        crc32(data)
     }
 
     fn fetch(connection: &mut impl Connection, addr: u32) -> Result<TargetData, String> {
@@ -300,9 +292,12 @@ impl<T: Connection> Runner<T> {
     }
 
     pub fn run_test(&mut self, test_case: &TestCase) -> Result<TestResult, String> {
+        log::debug!("Running test: {} @ {:X}", test_case.test_name, test_case.addr);
         self.connection.reset_run(self.stack_pointer, self.entry_point)?;
+        log::debug!("Waiting for device to boot and enter test framework");
         self.wait_for_ready(Duration::from_millis(500))?;
 
+        log::debug!("Halting device again to write test function pointer");
         self.connection.halt(Duration::from_millis(100))?;
         let mut fun_ptr = [0_u8; 4];
         LittleEndian::write_u32(&mut fun_ptr, test_case.addr as u32);
@@ -379,6 +374,12 @@ impl<T: Connection> Runner<T> {
         while now.elapsed().as_millis() < timeout.as_millis() {
             sleep(Duration::from_millis(10));
             let addr = self.test_data_addr;
+            let data = self.connection.read_ram(addr, 6 * 4)?;
+            let crc = LittleEndian::read_u32(&data[20..data.len()]);
+            if crc == 0 {
+                continue;
+            }
+
             let data = TargetData::fetch(&mut self.connection, addr)?;
             let done = match data.state {
                 Some(TargetState::Ready) => true,
@@ -392,3 +393,14 @@ impl<T: Connection> Runner<T> {
     }
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn check_crc() {
+        let crc = TargetData::crc32(&[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39]);
+        assert_eq!(crc, 0xCBF43926);
+    }
+}
