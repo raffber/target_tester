@@ -18,4 +18,6 @@ pub struct Config {
     pub interface: Interface,
     pub speed: Speed,
     pub target: String,
+    pub target_description: Option<String>,
+    pub vector_table_offset: u32,
 }

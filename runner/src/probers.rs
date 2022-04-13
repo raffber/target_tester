@@ -1,6 +1,9 @@
 use std::time::Duration;
-use probe_rs::{CoreRegisterAddress, MemoryInterface, Probe, Session};
+
+use probe_rs::{CoreRegisterAddress, MemoryInterface, Probe, Session, WireProtocol};
 use probe_rs::flashing::DownloadOptions;
+
+use crate::config::{Interface, Speed};
 use crate::connection::Connection;
 
 pub struct ProbeRsConnection {
@@ -8,9 +11,20 @@ pub struct ProbeRsConnection {
 }
 
 impl ProbeRsConnection {
-    pub fn connect(device: &str) -> Result<Self, String> {
+    pub fn connect(device: &str, interface: Interface, speed: Speed) -> Result<Self, String> {
         let probes = Probe::list_all();
-        let probe = probes[0].open().map_err(|x| format!("{}", x))?;
+        let mut probe = probes[0].open().map_err(|x| format!("{}", x))?;
+
+        match interface {
+            Interface::JTAG => probe.select_protocol(WireProtocol::Jtag).map_err(|x| format!("{}", x))?,
+            Interface::SWD => probe.select_protocol(WireProtocol::Swd).map_err(|x| format!("{}", x))?,
+        }
+        match speed {
+            Speed::KHz(x) => {
+                probe.set_speed(x as u32).map_err(|x| format!("{}", x))?;
+            }
+            _ => {}
+        }
 
         let session = probe.attach(device).map_err(|x| format!("{}", x))?;
 
