@@ -68,6 +68,14 @@ impl Connection for ProbeRsConnection {
     }
 
     fn download(&mut self, addr: u32, data: &[u8]) -> Result<(), String> {
+        {
+            let mut buf = vec![0_u8; data.len()];
+            let mut core = self.session.core(0).map_err(|x| format!("{}", x))?;
+            core.read_8(addr, &mut buf).map_err(|x| format!("{}", x))?;
+            if data == &buf {
+                return Ok(());
+            }
+        }
         let mut loader = self.session.target().flash_loader();
         loader.add_data(addr, data).expect("Invalid flash regions in binary");
         loader.commit(&mut self.session, DownloadOptions::default()).map_err(|x| format!("{}", x))?;
