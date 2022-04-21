@@ -47,10 +47,7 @@ TEST(test_suite, test_name) {
 ```shell
 $ cat target_test_config.json
 {
-  "interface": "SWD",
-  "speed": {
-    "KHz": 4000
-  },
+  "interface": "SWD", # or JTAG
   "target": "STM32F105"
 }
 ```
@@ -58,12 +55,32 @@ $ cat target_test_config.json
 * Run the test with the test runner:
 
 ```shell
-./target_tester --config target_test_config.json build/my-test-app
+./target_tester --config target_test_config.json --output results.xml build/my-test-app 
 ```
 
-## More Features
+The `--output` argument is optional. It allows exporting JUnit XML results for integration with CI.
+
+## More Configuration Features
+
+* Specify the communication speed of the debug probe: `"speed": {"KHz": 4000}`
+* Add `probe-rs` target descriptions: `"target_description": "path/to/target_description.yaml"`. Note that the path is
+  evaluated relative to the path of the config file. For more infor
+* A vector table offset:`vector_table_offset: 1234`. Depending on your target or if you have a bootloader that you would
+  like to skip you can provide the offset of the vector table in flash. The stack pointer (SP) and program counter (PC),
+  will be initialized based on the values found in the vector table
 
 ## Building the test runner
 
+## License
 
+Licensed under either of
 
+* Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or
+  http://www.apache.org/licenses/LICENSE-2.0)
+* MIT license ([LICENSE-MIT](LICENSE-MIT) or
+  http://opensource.org/licenses/MIT) at your option.
+
+## Acknowledgements
+
+A big thank you to the [`probe-rs`](https://github.com/probe-rs/probe-rs) developers for building such an awesome
+library. Implementing this would have been much more time-consuming without it.

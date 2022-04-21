@@ -23,6 +23,9 @@ impl ProbeRsConnection {
             Speed::KHz(x) => {
                 probe.set_speed(x as u32).map_err(|x| format!("{}", x))?;
             }
+            Speed::Auto => {
+                probe.set_speed(4000).map_err(|x| format!("{}", x))?;
+            }
             _ => {}
         }
 
