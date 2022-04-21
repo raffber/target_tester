@@ -56,6 +56,38 @@ void target_test_fail_with_reason(const char *file_path, uint32_t lineno, int32_
         target_test_fail_with_reason(__FILE__, __LINE__, 3);                                                           \
     } while (0);
 
+#define ASSERT_LE(lhs, rhs)                                                                                            \
+    do {                                                                                                               \
+        if ((lhs) < (rhs)) {                                                                                           \
+            break;                                                                                                     \
+        }                                                                                                              \
+        target_test_fail_with_reason(__FILE__, __LINE__, 4);                                                           \
+    } while (0);
+
+#define ASSERT_LEQ(lhs, rhs)                                                                                           \
+    do {                                                                                                               \
+        if ((lhs) <= (rhs)) {                                                                                          \
+            break;                                                                                                     \
+        }                                                                                                              \
+        target_test_fail_with_reason(__FILE__, __LINE__, 5);                                                           \
+    } while (0);
+
+#define ASSERT_GE(lhs, rhs)                                                                                            \
+    do {                                                                                                               \
+        if ((lhs) > (rhs)) {                                                                                           \
+            break;                                                                                                     \
+        }                                                                                                              \
+        target_test_fail_with_reason(__FILE__, __LINE__, 6);                                                           \
+    } while (0);
+
+#define ASSERT_GEQ(lhs, rhs)                                                                                           \
+    do {                                                                                                               \
+        if ((lhs) > (rhs)) {                                                                                           \
+            break;                                                                                                     \
+        }                                                                                                              \
+        target_test_fail_with_reason(__FILE__, __LINE__, 7);                                                           \
+    } while (0);
+
 #ifdef __cplusplus
 }// extern "C"
 #endif
